@@ -1,0 +1,213 @@
+---
+title: "HW2"
+output: pdf_document
+date: "2024-01-25"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## 1
+
+Without the loss of generity, assume y and $\hat{y}$ are mean zero. From linear regression model, we have 
+\begin{align}
+    (y-\hat{y})^T \cdot \hat{y} & = 0 \\
+    y^T \cdot \hat{y} & =\hat{y}^T \cdot \hat{y}
+\end{align}
+So 
+\begin{align}
+    R^2 & = 1 - \frac{\sum_{i=1}^{n} (y_i - \hat{y}_i)^2}{\sum_{i=1}^{n} y_i^2} \\
+    & = 1 - \frac{y^T \cdot y - 2y^T \cdot \hat{y} + \hat{y}^T \cdot \hat{y}}{y^T \cdot y} \\
+    & = 1 - \frac{y^T \cdot y - \hat{y}^T \cdot \hat{y}}{y^T \cdot y} \\
+    &= \frac{\hat{y}^T \cdot \hat{y}}{y^T \cdot y}
+\end{align}
+The empirical squared correlation between y and $\hat{y}$ is 
+\begin{align}
+    \rho^2 & = \frac{\left(\frac{1}{n} \sum_{i=1}^{n} \hat{y}_i y_i\right)^2}{\left(\frac{1}{n} \sum_{i=1}^{n} \hat{y}_i^2\right)\left(\frac{1}{n} \sum_{i=1}^{n} y_i^2\right)} \\
+    & = \frac{\hat{y}^T \cdot y}{(\hat{y}^T \cdot \hat{y})(y \cdot y)} \\
+    & = \frac{\hat{y}^T \cdot \hat{y}}{(\hat{y}^T \cdot \hat{y})(y \cdot y)} \\
+    & = R^2
+\end{align}
+
+```{r}
+```
+## 2
+
+```{r}
+library(car)
+
+generate_n <- function(n) {
+  x <- runif(n, -1, 1) 
+  y <- rnorm(n, mean = 3 + 0.5 * x, sd = 0.5)  
+  model <- lm(y ~ x)  
+  return(coef(model))  
+}
+N <- 1000 
+intercepts <- list("50"=numeric(N),"100"=numeric(N),"200"=numeric(N))
+slopes <- list("50"=numeric(N),"100"=numeric(N),"200"=numeric(N))
+sample <- list(50,100,200)
+
+for (n in sample) {
+  for (i in 1:N) {
+    coef <- generate_n(n)
+    intercepts[[as.character(n)]][i] <- coef[1]
+    slopes[[as.character(n)]][i] <- coef[2]
+  }
+}
+```
+
+```{r}
+par(mfrow=c(2,2))
+
+x<-intercepts[["50"]]
+qqPlot(x,distribution = 'norm',main="intercepts 50")
+
+x<-intercepts[["100"]]
+qqPlot(x,distribution = 'norm',main="intercepts 100")
+
+x<-intercepts[["200"]]
+qqPlot(x,distribution = 'norm',main="intercepts 200")
+```
+```{r}
+par(mfrow=c(2,2))
+
+x<-slopes[["50"]]
+qqPlot(x,distribution = 'norm',main="slopes 50")
+
+x<-slopes[["100"]]
+qqPlot(x,distribution = 'norm',main="slopes 100")
+
+x<-slopes[["200"]]
+qqPlot(x,distribution = 'norm',main="slopes 200")
+```
+```{r}
+# Assuming x and y are your datasets
+x <- intercepts[["50"]]
+y <- slopes[["50"]]
+
+
+dataEllipse(x, y, level = 0.95, col = "black")
+
+```
+I plotted a scatter plot and a 95% confidence interval to see if they are jointly normal distributed. Since most of the points are inside the ellipse, so i think they are 
+jointly normal distributed. 
+```{r}
+
+generate_n <- function(n,df) {
+  x <- runif(n, -1, 1) 
+  y <- 3 + 0.5 * x + rt(n, df)
+  model <- lm(y ~ x)  
+  return(coef(model))  
+}
+N <- 1000 
+results=list()
+intercepts <- list("50"=numeric(N),"100"=numeric(N),"200"=numeric(N))
+slopes <- list("50"=numeric(N),"100"=numeric(N),"200"=numeric(N))
+sample <- list(50,100,200)
+dfs=c(2, 5, 10, 20)
+
+for(df in dfs){
+  
+  for (n in sample) {
+  for (i in 1:N) {
+    coef <- generate_n(n,df)
+    intercepts[[as.character(n)]][i] <- coef[1]
+    slopes[[as.character(n)]][i] <- coef[2]
+  }
+    results[[paste("df", df, "n", n)]]<- list(intercepts = intercepts[[as.character(n)]], slopes = slopes[[as.character(n)]])
+  }
+  }
+```
+
+```{r}
+par(mfrow=c(2,3))
+df=2
+  for (n in sample){
+    x<-results[[paste("df", df, "n", n)]]
+    qqPlot(x$intercepts,distribution = 'norm',main=paste("df", df, "n", n))
+    qqPlot(x$slopes,distribution = 'norm',main=paste("df", df, "n", n))
+  }
+
+```
+
+```{r}
+par(mfrow=c(2,3))
+df=5
+  for (n in sample){
+    x<-results[[paste("df", df, "n", n)]]
+    qqPlot(x$intercepts,distribution = 'norm',main=paste("df", df, "n", n))
+    qqPlot(x$slopes,distribution = 'norm',main=paste("df", df, "n", n))
+  }
+
+```
+```{r}
+par(mfrow=c(2,3))
+df=10
+  for (n in sample){
+    x<-results[[paste("df", df, "n", n)]]
+    qqPlot(x$intercepts,distribution = 'norm',main=paste("df", df, "n", n))
+    qqPlot(x$slopes,distribution = 'norm',main=paste("df", df, "n", n))
+  }
+
+```
+
+```{r}
+par(mfrow=c(2,3))
+df=20
+  for (n in sample){
+    x<-results[[paste("df", df, "n", n)]]
+    qqPlot(x$intercepts,distribution = 'norm',main=paste("df", df, "n", n))
+    qqPlot(x$slopes,distribution = 'norm',main=paste("df", df, "n", n))
+  }
+
+```
+As the degree of t distribution error grow larger, the qq plot of regression error converge to normal distribution., when the degree is 2, it's far from normal distribution.
+
+
+## 3
+```{r}
+library(MASS)
+data(Boston)
+
+continuous_vars <- sapply(Boston, is.numeric)
+continuous_vars["chas"] <- FALSE
+continuous_vars["rad"] <- FALSE
+lm_model <- lm(medv ~ ., data = Boston[, continuous_vars])
+```
+```{r}
+plot(lm_model)
+```
+```{r}
+library(car)
+crPlots(lm_model)
+```
+From the Residuals vs fitted values plot above, the most residuals are distributed around 0, so its safe to say the error is mean zero.
+
+From the standardized residual plot, we see that residuals are distributed around 1, following certain normal distribution shape, also from the Partial residual plots, residuals are not replated to variables, even if rm might have some relationship with residual, it's not so influential. So its safe to say error is homoscedasticity.
+
+From the qq plot, we see the residuals are most around diagnol line, so its safe to say its normally distributed.
+```{r}
+plot(hatvalues(lm_model), type = "h")
+p = length(continuous_vars)
+n=506
+abline(h = 2 * (p + 1) / n, lty = 2,col = 'darkred')
+high_leverage_points <- which(hatvalues(lm_model) > 2 * (p + 1) / n)
+```
+```{r}
+plot(abs(rstudent(lm_model)), type = "h",ylab = "Externally Studentized Residuals (in absolute value)")
+abline(h = qt(.95, n - p - 2),col = 'darkred') 
+high_leverage_points2 <- which(abs(rstudent(lm_model)) > qt(.95, n - p - 2))
+```
+The influential observations are 215 366 368 369 415.
+```{r}
+influential_points=intersect(high_leverage_points2,high_leverage_points)
+print(influential_points)
+```
+```{r}
+vif_values <- vif(lm_model)
+
+# Print VIF values
+print(vif_values)
+
+```
+From the Variance Inflation Factors, we see that all the variable have a Factors less than 10, so its safe to say there is no multicollinearity between variables.
