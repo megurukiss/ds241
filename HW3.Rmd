@@ -1,0 +1,129 @@
+---
+title: "HW3"
+output: pdf_document
+date: "2024-01-28"
+---
+
+## 1
+
+### a
+
+```{r}
+library(ggplot2)
+
+generate_matrix <- function(n, p) {
+  x <- seq(1, n) / (n + 1)
+  X <- outer(x, 0:p, `^`)
+  return(X)
+}
+
+p <- 1:20
+n <- c(30, 50, 100, 200, 500, 1000)
+condition_numbers <- data.frame(n = integer(), p = integer(), cond_num = numeric())
+
+for (ni in n) {
+  for (pi in p) {
+    X <- generate_matrix(ni, pi)
+    cond_num <- kappa(X)
+    condition_numbers <- rbind(condition_numbers, data.frame(n = ni, p = pi, cond_num = cond_num))
+  }
+}
+
+ggplot(condition_numbers, aes(x = p, y = cond_num, color = as.factor(n))) +
+  geom_line() +
+  labs(title = "Condition Numbers Against p",
+       x = "p",
+       y = "Condition Number",
+       color = "n") +
+  theme_minimal()
+
+```
+As the degree of polynomial p grows, the the condition numbers also grows exponentially, the conditional number grows to around 2e16 when p is 20 and n is 30. The number of samples has a negative impact on the conditional number. As the number of samples get larger, the matrix become more stable. So the polynomial matrix is ill-conditioned and unstable when the degree is large and number of samples is relatively small.
+
+### b
+
+```{r}
+
+generate_matrix <- function(n, p) {
+  x <- seq(1, n) / (n + 1)
+  X <- poly(x, degree = p)
+  return(X)
+}
+
+p <- 1:20
+n <- c(30, 50, 100, 200, 500, 1000)
+condition_numbers <- data.frame(n = integer(), p = integer(), cond_num = numeric())
+
+for (ni in n) {
+  for (pi in p) {
+    X <- generate_matrix(ni, pi)
+    cond_num <- kappa(X)
+    condition_numbers <- rbind(condition_numbers, data.frame(n = ni, p = pi, cond_num = cond_num))
+  }
+}
+
+ggplot(condition_numbers, aes(x = p, y = cond_num, color = as.factor(n))) +
+  geom_line() +
+  labs(title = "Condition Numbers Against p",
+       x = "p",
+       y = "Condition Number",
+       color = "n") +
+  theme_minimal()
+
+```
+The conditional number of all the p and n pairs are exactly 1, which indicate that the matrix for orthogonal polynomials are stable.
+
+## 2
+
+### a
+
+```{r}
+piecewiseConstant <- function(x, y, L, plot = TRUE){
+  intervals <- 2^L
+  K = quantile(x, seq(0, 1, len = intervals), type=1)
+  pts = rep(0,2*(intervals-1))
+  vals <- rep(0,2*(intervals-1))
+  
+  for (j in 1:intervals) {
+    I = (K[j] < x)&(x <= K[j+1])
+    if (length(y[I]) > 0 && !all(is.na(y[I]))) {
+      fit = lm(y[I] ~ 1)
+      pts[2*j-1] = K[j]
+      pts[2*j] = K[j+1]
+      vals[2*j-1] = coef(fit)
+      vals[2*j] = coef(fit)
+    }else{
+      pts[2*j-1] = K[j]
+      pts[2*j] = K[j+1]
+      vals[2*j-1] = NA
+      vals[2*j] = NA
+    }
+  }
+  
+  if(plot){
+    plot(x, y, main = "Piecewise Constant Fit", xlab = "x", ylab = "y")
+    lines(pts, vals, col="red", lwd = 3)
+  }
+  return(list(pts = pts, vals = vals))
+}
+```
+
+### b
+
+```{r}
+load("~/workspace/codings/R/04cars.version2.rda")
+horsepower <- dat$Horsepower
+city_mpg <- dat$City_MPG
+
+horsepower_scaled <- (horsepower - min(horsepower)) / (max(horsepower) - min(horsepower))
+L2 <- piecewiseConstant(horsepower_scaled, city_mpg, L = 2, plot = FALSE)
+L3 <- piecewiseConstant(horsepower_scaled, city_mpg, L = 3, plot = FALSE)
+L4 <- piecewiseConstant(horsepower_scaled, city_mpg, L = 4, plot = FALSE)
+
+plot(horsepower_scaled, city_mpg, xlab = "Horsepower", ylab = "City_Mpg")
+lines(L2$pts, L2$vals, col="blue", lwd = 2)
+lines(L3$pts, L3$vals, col="green", lwd = 2)
+lines(L4$pts, L4$vals, col="red", lwd = 2)
+legend("topright", legend = c("L=2", "L=3", "L=4"), col = c("blue", "green", "red"), lty = 1, lwd = 2)
+```
+
