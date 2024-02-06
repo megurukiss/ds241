@@ -164,6 +164,8 @@ As the degree of t distribution error grow larger, the qq plot of regression err
 
 
 ## 3
+
+### a
 ```{r}
 library(MASS)
 data(Boston)
@@ -185,23 +187,46 @@ From the Residuals vs fitted values plot above, the most residuals are distribut
 From the standardized residual plot, we see that residuals are distributed around 1, following certain normal distribution shape, also from the Partial residual plots, residuals are not replated to variables, even if rm might have some relationship with residual, it's not so influential. So its safe to say error is homoscedasticity.
 
 From the qq plot, we see the residuals are most around diagnol line, so its safe to say its normally distributed.
+
+### b
 ```{r}
+
 plot(hatvalues(lm_model), type = "h")
 p = length(continuous_vars)
 n=506
 abline(h = 2 * (p + 1) / n, lty = 2,col = 'darkred')
 high_leverage_points <- which(hatvalues(lm_model) > 2 * (p + 1) / n)
 ```
+
+### c
+
 ```{r}
 plot(abs(rstudent(lm_model)), type = "h",ylab = "Externally Studentized Residuals (in absolute value)")
 abline(h = qt(.95, n - p - 2),col = 'darkred') 
 high_leverage_points2 <- which(abs(rstudent(lm_model)) > qt(.95, n - p - 2))
 ```
-The influential observations are 215 366 368 369 415.
+If we check residual value and hatvalues, the influential observations are 215 366 368 369 415.
 ```{r}
 influential_points=intersect(high_leverage_points2,high_leverage_points)
 print(influential_points)
 ```
+```{r}
+dffits_values <- dffits(lm_model)
+plot(abs(dffits_values),type='h',col='darkred',ylab='DFFITS')
+p = length(continuous_vars)
+n=506
+abline(h=2*sqrt(p/n),lty=2)
+threshold =2*sqrt(p/n)
+influential_points <- which(abs(dffits_values) > threshold)
+influential_points <- unique(influential_points)
+```
+```{r}
+influential_points
+```
+If we use DFFTTS as a measure, the influential points are as above.
+
+### d
+
 ```{r}
 vif_values <- vif(lm_model)
 
@@ -210,3 +235,8 @@ print(vif_values)
 
 ```
 From the Variance Inflation Factors, we see that all the variable have a Factors less than 10, so its safe to say there is no multicollinearity between variables.
+
+
+## Conclusion
+
+I finished the homework on my own without the help of any teemmates.

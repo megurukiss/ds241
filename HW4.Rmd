@@ -1,0 +1,132 @@
+---
+title: "HW4"
+output: pdf_document
+date: "2024-02-06"
+---
+
+## 1
+
+### a
+```{r}
+library(MASS)
+data(Boston)
+
+boxplot(medv ~ chas, data = Boston, xlab = "CHAS (0 or 1)", ylab = "MEDV", main = "MEDV by CHAS")
+
+```
+The observations with CHAS value 1 have a higher mean MEDV value than observations with CHAS value 0. Observations with CHAS value 0 have outliers.
+```{r}
+model <- lm(medv ~ chas, data = Boston)
+anova(model)
+
+```
+The Pr(>F) is less than 0.05 or 0.01. So we reject the null hypothesis which means the mean medv value with chas value 1 and medv with chas value 0  have statistically significant difference. The result consistent with the boxplot, which shows the CHAS value 1 have a significant higher mean MEDV value than observations with CHAS value 0.
+
+
+### b
+```{r}
+boxplot(medv ~ rad, data = Boston, xlab = "RAD", ylab = "MEDV", main = "MEDV by RAD")
+```
+The mean values of MEDV varies a lot with different RAD values.
+
+```{r}
+model <- lm(medv ~ rad, data = Boston)
+anova(model)
+```
+The Pr(>F) is 2.2e-16, which is much smaller than 0.05 or 0.01, so we reject the null hypothesis. So the mean medv value are significantly different, which means rad have a significant affect on medv values.
+
+### c
+
+```{r}
+library(ggplot2)
+Boston$chas_rad <- with(Boston, paste(chas, rad, sep = "-"))
+Boston$chas_rad <- as.factor(Boston$chas_rad)
+
+ggplot(Boston, aes(x = chas_rad, y = medv)) +
+  geom_boxplot() +
+  labs(x = "CHAS and RAD combination", y = "MEDV", title = "MEDV by CHAS and RAD combination") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+The affect of RAD on MEDV is larger than the affect of CHAS.THe mean values varies a lot within the same CHAS group. The conbination of rad and chas also have an influence on medv values.
+
+```{r}
+interaction.plot(Boston$rad, Boston$chas, Boston$medv, 
+                 xlab = "RAD", ylab = "MEDV", 
+                 legend = TRUE, col = c("red", "blue"), 
+                 lty = 1:2, pch = 18:19,
+                 main = "Interaction Plot of MEDV by CHAS and RAD")
+```
+```{r}
+model_interaction <- lm(medv ~ chas * rad, data = Boston)
+anova(model_interaction)
+```
+All of chas, rad, and chas:rad have significant affect on medv with alpha be 0.05. It's consistent with the previous F tests. The difference is that the combination of chas:rad also have a significant influence on medv.
+
+### d
+```{r}
+ggplot(Boston, aes(x = lstat, y = medv, color = factor(chas))) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(color = "CHAS", x = "LSTAT (%)", y = "MEDV", title = "Relationship between LSTAT and MEDV by CHAS") +
+  theme_minimal()
+```
+
+From the plot we can see that the decrease indeed is effected by the CHAS value.When CHAS is 0, the MEDV decrease faster.
+
+```{r}
+model <- lm(medv ~ lstat * chas, data = Boston)
+summary(model)
+anova(model)
+```
+
+
+From the model fit, we can see that chas has a positive affect on medv and the influence is significant given the F test metric Pr(>F)  is 4.675e-06. 
+
+
+## 2
+
+### a
+```{r}
+model_poly <- lm(medv ~ lstat + I(lstat^2) + I(lstat^3), data = Boston)
+summary(model_poly)
+```
+### b
+```{r}
+library(splines)
+
+
+lstat_bs <- bs(Boston$lstat, degree = 3,df=4)
+model_bs <- lm(medv ~ lstat_bs, data = Boston)
+
+model_ns <- lm(medv ~ ns(lstat, df = 4), data = Boston)
+
+```
+
+### c
+```{r}
+Boston$poly_pred <- predict(model_poly, newdata = Boston)
+Boston$bs_pred <- predict(model_bs, newdata = Boston)
+Boston$ns_pred <- predict(model_ns, newdata = Boston)
+
+p <- ggplot(Boston, aes(x = lstat)) +
+  geom_point(aes(y = medv, color = "Data Points"), alpha = 0.5) +
+  geom_line(aes(y = poly_pred, color = "Polynomial Fit"), size = 1) +
+  geom_line(aes(y = bs_pred, color = "B-spline Fit"), size = 1) +
+  geom_line(aes(y = ns_pred, color = "Natural Spline Fit"), size = 1)
+
+p <- p + scale_color_manual(values = c("Data Points" = "black", 
+                                       "Polynomial Fit" = "red", 
+                                       "B-spline Fit" = "green", 
+                                       "Natural Spline Fit" = "blue"),
+                            name = "Models",
+                            labels = c("Data Points", "Polynomial", "B-spline", "Natural Spline"))
+
+p + labs(x = "LSTAT (%)", y = "MEDV") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+
+```
+
+
+
