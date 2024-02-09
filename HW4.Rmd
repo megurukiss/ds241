@@ -4,6 +4,8 @@ output: pdf_document
 date: "2024-02-06"
 ---
 
+code : [https://github.com/megurukiss/ds241/blob/main/HW4.Rmd](https://github.com/megurukiss/ds241/blob/main/HW4.Rmd)
+
 ## 1
 
 ### a
@@ -93,40 +95,46 @@ summary(model_poly)
 ### b
 ```{r}
 library(splines)
+library(quantreg)
 
+library(MASS)
 
-lstat_bs <- bs(Boston$lstat, degree = 3,df=4)
-model_bs <- lm(medv ~ lstat_bs, data = Boston)
+m.huber = rlm(medv ~ lstat + I(lstat^2) + I(lstat^3), psi = psi.huber, data = Boston)
 
-model_ns <- lm(medv ~ ns(lstat, df = 4), data = Boston)
+m.lms = lmsreg(medv ~ lstat + I(lstat^2) + I(lstat^3), data = Boston)
+
+m.lts = ltsreg(medv ~ lstat + I(lstat^2) + I(lstat^3), data = Boston)
 
 ```
 
 ### c
 ```{r}
-Boston$poly_pred <- predict(model_poly, newdata = Boston)
-Boston$bs_pred <- predict(model_bs, newdata = Boston)
-Boston$ns_pred <- predict(model_ns, newdata = Boston)
+lstat_seq <- seq(min(Boston$lstat), max(Boston$lstat), length.out = 100)
+predict_data <- data.frame(lstat = lstat_seq)
+predict_data$m_huber_pred <- predict(m.huber, newdata = predict_data)
+predict_data$m_lms_pred <- predict(m.lms, newdata = predict_data)
+predict_data$m_lts_pred <- predict(m.lts, newdata = predict_data)
+predict_data$model_poly_pred <- predict(model_poly, newdata = predict_data)
 
-p <- ggplot(Boston, aes(x = lstat)) +
-  geom_point(aes(y = medv, color = "Data Points"), alpha = 0.5) +
-  geom_line(aes(y = poly_pred, color = "Polynomial Fit"), size = 1) +
-  geom_line(aes(y = bs_pred, color = "B-spline Fit"), size = 1) +
-  geom_line(aes(y = ns_pred, color = "Natural Spline Fit"), size = 1)
-
-p <- p + scale_color_manual(values = c("Data Points" = "black", 
-                                       "Polynomial Fit" = "red", 
-                                       "B-spline Fit" = "green", 
-                                       "Natural Spline Fit" = "blue"),
-                            name = "Models",
-                            labels = c("Data Points", "Polynomial", "B-spline", "Natural Spline"))
-
-p + labs(x = "LSTAT (%)", y = "MEDV") +
+p <- ggplot(Boston, aes(x = lstat, y = medv)) +
+  geom_point(aes(color = "Data Points"), alpha = 0.5) +
+  geom_line(data = predict_data, aes(x = lstat, y = m_huber_pred, color = "Huber Fit")) +
+  geom_line(data = predict_data, aes(x = lstat, y = model_poly_pred, color = "Polynomial Fit")) +
+  geom_line(data = predict_data, aes(x = lstat, y = m_lms_pred, color = "LMS Fit")) +
+  geom_line(data = predict_data, aes(x = lstat, y = m_lts_pred, color = "LTS Fit")) +
+  scale_color_manual(values = c("Data Points" = "black", 
+                                "Huber Fit" = "red", 
+                                "Polynomial Fit" = "blue", 
+                                "LMS Fit" = "green", 
+                                "LTS Fit" = "orange"),
+                     name = "Model Type",
+                     labels = c("Data Points", "Huber", "Polynomial", "LMS", "LTS")) +
+  labs(title = "Fits of MEDV vs. LSTAT", x = "LSTAT", y = "MEDV") +
   theme_minimal() +
   theme(legend.position = "bottom")
-
-
+print(p)
 ```
+
 
 
 

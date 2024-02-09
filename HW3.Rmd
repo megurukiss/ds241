@@ -4,6 +4,10 @@ output: pdf_document
 date: "2024-01-28"
 ---
 
+## code link
+[https://github.com/megurukiss/ds241/blob/main/HW3.Rmd](https://github.com/megurukiss/ds241/blob/main/HW3.Rmd)
+
+
 ## 1
 
 ### a
