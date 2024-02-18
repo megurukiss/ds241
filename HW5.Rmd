@@ -1,0 +1,173 @@
+---
+title: "HW5"
+output: pdf_document
+date: "2024-02-17"
+---
+
+code : [https://github.com/megurukiss/ds241/blob/main/HW5.Rmd](https://github.com/megurukiss/ds241/blob/main/HW5.Rmd)
+
+
+## 1
+
+```{r}
+bootLS<-function(x, y, conf = 0.95, B = 1000){
+  n <- length(y)
+  lm_orig <- lm(y ~ x)
+  
+  beta1 = lm_orig$coefficients[2]
+  sebeta1=summary(lm_orig)$coefficients[,2][2]
+  
+  beta1_boot = rep(NA,B)
+  t1_boot = rep(NA,B)
+  
+  for (i in 1:B) {
+  indices = sample(seq(1,n), replace=T)
+  fit_boot = lm(y[indices]~x[indices])
+  
+  beta1_boot[i] = fit_boot$coefficients[2]
+
+  sebeta1_boot = summary(fit_boot)$coefficients[,2][2]
+  
+  t1_boot[i]=(beta1_boot[i]-beta1)/(sebeta1_boot)
+  }
+  
+  boot_slp = matrix(c(beta1 + quantile(t1_boot,c((1-conf)/2,(1+conf)/2))*sebeta1),ncol = 2)
+  colnames(boot_slp) = c('2.5 %','97.5 %')
+  return(boot_slp)
+}
+```
+
+
+##2
+
+```{r}
+library(ggplot2)
+
+
+simulate<-function(n, B = 200, conf = 0.95, distribution = "normal"){
+  set.seed(43)
+  x <- runif(n, -100, 100)
+  if (distribution == "normal") {
+    epsilon <- rnorm(n, mean = 0, sd = 1)
+  } else if (distribution == "exponential") {
+    epsilon <- rexp(n, rate = 1) - 1 
+  }
+  y <- 2 + 0.5 * x + epsilon
+  
+  start_time_classical <- Sys.time()
+  model_classical <- lm(y ~ x)
+  classical_summary <- summary(model_classical)
+  se_slope <- classical_summary$coefficients["x", "Std. Error"]
+  t_value <- qt(1 - (1 - conf) / 2, df = n - 2)
+  classical_ci <- coef(model_classical)["x"] + c(-1, 1) * t_value * se_slope
+  end_time_classical <- Sys.time()
+  
+  start_time_bootstrap <- Sys.time()
+  bootstrap_result <- bootLS(x, y, conf, B)
+  end_time_bootstrap <- Sys.time()
+  
+  
+  classical_length <- classical_ci[2] - classical_ci[1]
+  bootstrap_length <- bootstrap_result[2]-bootstrap_result[1]
+  
+  return(list(classical_ci = classical_ci,
+              bootstrap_ci =bootstrap_result,
+              classical_length = classical_length,
+              bootstrap_length = bootstrap_length,
+              classical_time = as.numeric(end_time_classical - start_time_classical, units = "secs"),
+              bootstrap_time = as.numeric(end_time_bootstrap - start_time_bootstrap, units = "secs")))
+}
+```
+
+### simulation
+
+```{r}
+perform_simulations <- function(sample_sizes, num_simulations) {
+  results <- data.frame()
+  for (n in sample_sizes) {
+    for (dist in c("normal", "exponential")) {
+      for (i in 1:num_simulations) {
+        # Simulate data
+        sim_results <- simulate(n = n, distribution = dist)
+        
+        # Record results for the classical method
+        results <- rbind(results, data.frame(
+          sample_size = n,
+          distribution = dist,
+          method = "classical",
+          lower_bound = sim_results$classical_ci[1], 
+          upper_bound = sim_results$classical_ci[2],  
+          interval_length = sim_results$classical_length,
+          computation_time = sim_results$classical_time
+        ))
+        
+        # Record results for the bootstrap method
+        results <- rbind(results, data.frame(
+          sample_size = n,
+          distribution = dist,
+          method = "bootstrap",
+          lower_bound = sim_results$bootstrap_ci[1],  
+          upper_bound = sim_results$bootstrap_ci[2],  
+          interval_length = sim_results$bootstrap_length,
+          computation_time = sim_results$bootstrap_time
+        ))
+      }
+    }
+  }
+  return(results)
+}
+
+```
+
+
+```{r}
+sample_sizes <- c(50, 100, 500, 1000, 5000)
+num_simulations <- 1000
+results_normal <- perform_simulations(sample_sizes, num_simulations)
+```
+
+
+
+```{r}
+library(ggplot2)
+
+# Plot for lower bounds
+ggplot(results_normal, aes(x = sample_size, y = lower_bound, color = method, group = interaction(method, distribution))) +
+  geom_line() +
+  facet_wrap(~distribution, scales = "free") +
+  labs(title = "Lower Bounds of Confidence Intervals", x = "Sample Size", y = "Lower Bound", color = "Method") +
+  theme_minimal()
+
+# Plot for upper bounds
+ggplot(results_normal, aes(x = sample_size, y = upper_bound, color = method, group = interaction(method, distribution))) +
+  geom_line() +
+  facet_wrap(~distribution, scales = "free") +
+  labs(title = "Upper Bounds of Confidence Intervals", x = "Sample Size", y = "Upper Bound", color = "Method") +
+  theme_minimal()
+```
+As the sample size grows larger, the lower bounds for classical estimation under normal error didn't change, while upper bounds decrease, which means the coverage decrease. Under exponential error, the lower bound increase while the upper bound stays same, which means coverage also decrease. 
+
+The value for bootstrap and classical are almost same.
+
+
+```{r}
+# Plot for interval lengths
+ggplot(results_normal, aes(x = sample_size, y = interval_length, color = method, group = interaction(method, distribution))) +
+  geom_line() +
+  facet_wrap(~distribution, scales = "free") +
+  labs(title = "Interval Lengths of Confidence Intervals", x = "Sample Size", y = "Interval Length", color = "Method") +
+  theme_minimal()
+
+```
+For both methods in both error distributions, the interval decreases, while the value of the bootstrap and classical are almost same.
+
+```{r}
+# Plot for computation times
+ggplot(results_normal, aes(x = sample_size, y = computation_time, color = method, group = interaction(method, distribution))) +
+  geom_line() +
+  facet_wrap(~distribution, scales = "free") +
+  labs(title = "Computation Times for Confidence Intervals", x = "Sample Size", y = "Computation Time (seconds)", color = "Method") +
+  theme_minimal()
+
+```
+The computation time for bootstrap is much longer than classical method. And as sample size grows, the bootstrap takes more time while classical method grows much less than bootstrap. I think this is because bootstrap need to resample, which is achieved by an iner loop, so the time it took is much longer.
