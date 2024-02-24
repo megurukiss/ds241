@@ -1,0 +1,210 @@
+---
+title: "HW6"
+output: pdf_document
+date: "2024-02-24"
+---
+
+code : [https://github.com/megurukiss/ds241/blob/main/HW6.Rmd](https://github.com/megurukiss/ds241/blob/main/HW6.Rmd)
+
+
+## 1
+
+\textbf{Proof:}
+
+\[
+\mathrm{E}\left(y_{0} - \hat{y}_{0}\right)^{2} = \mathrm{E}\left(f(\mathbf{x}_{0}) + \epsilon - \hat{f}(\mathbf{x}_{0})\right)^{2}
+\]
+
+Add and subtract $\mathrm{E} \hat{f}(\mathbf{x}_{0})$ inside the square and Expanding the square and grouping terms gives:
+
+\[
+  \mathrm{E}\left((f(\mathbf{x}_{0}) -  \mathrm{E} \hat{f}(\mathbf{x}_{0})) + (\mathrm{E} \hat{f}(\mathbf{x}_{0}) - \hat{f}(\mathbf{x}_{0})) + \epsilon\right)^{2} 
+\]
+
+The first term $f(\mathbf{x}_{0}) -  \mathrm{E} \hat{f}(\mathbf{x}_{0})$ is a constant and contains no random variables. The $\epsilon$ is independent with $\mathrm{E} \hat{f}(\mathbf{x}_{0})) + (\mathrm{E} \hat{f}(\mathbf{x}_{0})$ and is mean zero from the assumption deduction of linear regression. So the cross terms are 0. So the equation can be expanded to
+
+\[
+ \left[\mathrm{E} \hat{f}(\mathbf{x}_{0}) - f(\mathbf{x}_{0})\right]^{2} + \mathrm{E}\left[\left(\hat{f}(\mathbf{x}_{0}) - \mathrm{E} \hat{f}(\mathbf{x}_{0})\right)^{2}\right] + \mathrm{E} (\epsilon^{2})
+\]
+\[
+= \text{Bias}^2\left[\hat{f}(\mathbf{x}_{0})\right] + \text{Var}\left[\hat{f}(\mathbf{x}_{0})\right] + \sigma^{2}
+\]
+
+
+##2 
+
+### a
+```{r}
+cv.lm <- function(x, y, k) {
+  n <- nrow(x)
+  folds <- cut(seq(1,n), breaks=k, labels=FALSE)
+  mse <- numeric(k)
+  
+  data_df <- cbind(x, y = y)
+  for (i in 1:k) {
+    
+    test_indices <- which(folds == i)
+    train_indices <- setdiff(1:n, test_indices)
+    
+    suppressWarnings({
+    # Fit the model on the training set
+    model <- lm(y ~ ., data = data_df[train_indices, ])
+    
+    predictions <- predict(model, newdata = data_df[test_indices, ])
+    })
+    
+    # Calculate the MSE for this fold
+    mse[i] <- sqrt(mean((predictions - data_df$y[test_indices])^2))
+  }
+  mean(mse)
+}
+
+```
+
+
+### b
+```{r}
+SequentialSelection <- function(x, y, method){
+  n <- ncol(x)
+  best_criteria <- if (method == "AdjR2") -Inf else Inf
+  best_model <- NULL
+  best_model_index <- 0
+  
+  for (i in 1:n) {
+    model <- lm(y ~ ., data = data.frame(x[, 1:i], y))
+    
+    if(method=="CV5"){
+      CV5 = cv.lm(x[, 1:i,drop = FALSE], y, 5)
+      criteria=CV5
+      if(criteria < best_criteria){
+        best_criteria <- criteria
+        best_model <- model
+        best_model_index <- i
+      }
+    }
+    else if(method=="AdjR2"){
+      AdjR2 = summary(model)$adj.r.squared
+      criteria=AdjR2
+      if(criteria > best_criteria){
+        best_criteria <- criteria
+        best_model <- model
+        best_model_index <- i
+      }
+    }
+    else if (method=="AIC"){
+      AIC = AIC(model)
+      criteria=AIC
+      if(criteria < best_criteria){
+        best_criteria <- criteria
+        best_model <- model
+        best_model_index <- i
+      }
+    }
+  }
+  return(best_model_index)
+}
+```
+## 3
+
+### a 
+```{r}
+
+generate_data <- function(n,max_degree=20) {
+  x <- runif(n, 0, 2*pi)
+  y <- sin(3*x) + x + rnorm(n, mean = 0, sd = 1)
+  data <- data.frame(y = y)
+  for(i in 1:max_degree) {
+    data[[paste0("x", i)]] <- x^i
+  }
+  return(data)
+}
+
+n_simulations <- 100
+n <- 200
+degree_selection <- matrix(NA, nrow = n_simulations, ncol = 3)
+first_3_datasets <- list()
+
+for (i in 1:n_simulations) {
+  set.seed(42+i)
+  data <- generate_data(n)
+  if (i <= 3) {
+    first_3_datasets[[i]] <- data
+  }
+  y <- data$y
+  x_poly <- data[, -which(names(data) == "y"), drop = FALSE]
+  degree_selection[i, 1] <- SequentialSelection(x_poly, y,  "AdjR2")
+  degree_selection[i, 2] <- SequentialSelection(x_poly, y,  "AIC")
+  degree_selection[i, 3] <- SequentialSelection(x_poly, y,  "CV5")
+}
+
+```
+
+```{r}
+library(ggplot2)
+data <- first_3_datasets[[1]]
+y <- data$y
+x <- data$x1
+
+plot_data_and_fit <- function(data, degree, criterion) {
+
+  formula <- as.formula(paste("y ~ poly(x1, ", degree, ", raw=TRUE)"))
+  model <- lm(formula, data = data)
+  x_seq <- seq(min(x), max(x), length.out = 200)
+  predictions <- predict(model, newdata = data.frame(x1 = x_seq))
+  
+  # Plot
+  ggplot(data, aes(x = x1, y = y)) +
+    geom_point() +
+    geom_line(data = data.frame(x1 = x_seq, y = predictions), aes(x = x1, y = y), color = 'red') +
+    ggtitle(paste("Best fit using", criterion, "- Polynomial Degree:", degree))
+}
+
+plot_data_and_fit(data, degree_selection[1, 1], "Adjusted R^2")
+plot_data_and_fit(data, degree_selection[1, 2], "AIC")
+plot_data_and_fit(data, degree_selection[1, 3], "CV5")
+```
+
+```{r}
+data <- first_3_datasets[[2]]
+plot_data_and_fit(data, degree_selection[2, 1], "Adjusted R^2")
+plot_data_and_fit(data, degree_selection[2, 2], "AIC")
+plot_data_and_fit(data, degree_selection[2, 3], "CV5")
+```
+
+```{r}
+data <- first_3_datasets[[3]]
+plot_data_and_fit(data, degree_selection[3, 1], "Adjusted R^2")
+plot_data_and_fit(data, degree_selection[3, 2], "AIC")
+plot_data_and_fit(data, degree_selection[3, 3], "CV5")
+```
+### Comments
+
+The first 3 data generated shows that the three criterians don't differs a lot from each other. The best degrees estimated are around 9 and 10. 
+
+
+```{r}
+par(mfrow = c(1, 3))
+criteria_names <- c("Adjusted R^2", "AIC", "CV5")
+
+
+line_colors <- c("red", "blue", "green")
+
+for (i in 1:3) {
+  # Histogram
+  hist_data <- degree_selection[, i]
+  h <- hist(hist_data ,
+            main = criteria_names[i], xlab = "Degree", col = "grey", 
+            xlim = c(min(degree_selection[, i]), max(degree_selection[, i])), probability = TRUE)
+  
+  # Density
+  d <- density(hist_data, adjust = 1.5)
+  
+  # Add density line to histogram
+  lines(d, col = line_colors[i], lwd = 2)
+}
+
+par(mfrow = c(1, 1))
+```
+### Comments
+From the distribution plot, we see that Adjusted R2 criteria have a higher chance to generate larger degree like 15 or 17 than other two criterias. The AIC and CV5 results distributed around 9 and 10, but CV5 have a much higher chance to get results in 9,10,11 than AIC.
+
