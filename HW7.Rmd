@@ -1,0 +1,132 @@
+---
+title: "HW7"
+output: pdf_document
+date: "2024-02-29"
+---
+
+code : [https://github.com/megurukiss/ds241/blob/main/HW7.Rmd](https://github.com/megurukiss/ds241/blob/main/HW7.Rmd)
+
+## 1
+
+### a
+
+```{r}
+library(ggplot2)
+
+dataset <- read.csv("./Placekick.csv")
+
+model <- glm(good ~ distance, data=dataset, family=binomial(link="logit"))
+summary(model)
+
+```
+
+```{r}
+prediction_data <- data.frame(distance=seq(min(dataset$distance), max(dataset$distance), by=1))
+prediction_data$predicted_good <- predict(model, newdata=prediction_data, type="response")
+
+# Plot
+ggplot(dataset, aes(x=distance, y=good)) + 
+  geom_point() +
+  geom_line(data=prediction_data, aes(x=distance, y=predicted_good), color='blue') +
+  labs(title="Logistic Regression Model Fit", x="Distance", y="Probability of Success")
+```
+
+The logistic regression model of good over distance is not so representative, it doesn't fit well when distance is less than 50. The groud truth shows that when distance is less than 50, the good can both be 0 or 1, with a similar number, while the logistic regression only generate higher probility for good to be 1. 
+
+### b
+```{r}
+library(MASS)
+initial_model <- glm(good ~ 1, data = dataset, family = binomial)
+full_model <- glm(good ~ ., data = dataset, family = binomial)
+forward_selected_model <- step(initial_model, scope = list(lower = initial_model, upper = full_model), direction = "forward")
+summary(forward_selected_model)
+```
+
+The model chosen is good ~ distance + PAT + change + wind.
+
+### c
+
+```{r}
+model <- glm(good ~ distance + PAT + change + wind, data = dataset, family = binomial)
+
+summary(model)
+
+coefficients <- coef(model)
+print(coefficients)
+
+
+```
+
+The decision boundary when probability of success is 0.5 is $4.75-0.087*distance+1.22*Pat-0.33*change-0.52*wind=0$
+
+### d
+
+The decision boundary when probability of success is 0.9 is 
+
+$4.75-0.087*distance+1.22*Pat-0.33*change-0.52*wind=log(9)$
+
+The probability of success 0.5 represents a scenario where the odds of success and failure are equal. The decision boundary at this threshold is where the model is indifferent between predicting success or failure. The output is classified to be success which is good 1 in this case when the output probability is larger than 0.5, and be good 0 when is smaller than 0.5. 
+
+
+The probability of success 0.9 indicates a much higher certainty in predicting success. The decision boundary for this threshold would be more conservative, which means the boundary is lower than 0.5 case so that the chance be classified good 1 is higher than be classified good 0.
+
+
+## 2
+
+### a
+
+```{r}
+bootGLM <- function(x, y, B = 1000){
+  if (!is.data.frame(x)) {
+    x <- as.data.frame(x)
+  }
+  
+  data <- cbind(x, y)
+  colnames(data)[ncol(data)] <- "y" 
+  
+  coef_matrix <- matrix(NA, nrow = B, ncol = ncol(x))
+  colnames(coef_matrix) <- colnames(x)
+  
+  for (i in 1:B) {
+    sample_indices <- sample(1:nrow(data), replace = TRUE)
+    resampled_data <- data[sample_indices, ]
+    
+    model <- glm(y ~ ., data = resampled_data, family = binomial)
+    
+    coef_matrix[i, ] <- coef(model)[-1]
+  }
+  
+  standard_errors <- apply(coef_matrix, 2, sd)
+  
+  return(standard_errors)
+}
+  
+```
+
+### b
+
+```{r}
+
+x <- dataset[, c("distance", "PAT", "change", "wind")]
+y <- dataset$good
+
+bootstrap_se <- bootGLM(x, y, B = 1000)
+print("Bootstrap Standard Errors:")
+print(bootstrap_se)
+
+model <- glm(good ~ distance + PAT + change + wind, data = dataset, family = binomial)
+model_summary <- summary(model)
+
+print("Model Summary Standard Errors:")
+print(sqrt(diag(vcov(model))))
+
+```
+
+The standard error for both distance and change are almost same in Bootstarp and Model summary. However, The SDE for PAT in Bootstrap is a bit higher than PAT in Model summary. Also the SDE for wind in Bootstrap is a bit lower than in the Model summary. 
+
+The higher SDE for PAT in Bootstrap method can attribute to the a missing important predicator. This means in the model selection step, maybe We missed an important predicator that we should have included into our model, thus caused the SDE to be higher. To solve it, I think maybe we should use other variable selection methods like backward selection or LASSO to see if there is any additional predicator selected. Also the higher SDE may attribute to the violations to model assumption, but since distance and change have a similar SDE, so I think the posibility should be decluded. 
+
+The lower SDE for wind in Bootstrap, may caused by the model overfitting, or because the distribution of wind variable is skewed. To solve this, again, maybe its a good idea to combine other variable selection methods. Also to dive into the distribution of wind variable to check it.
+
+
+
