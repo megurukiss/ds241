@@ -1,0 +1,503 @@
+---
+title: "Final"
+output: pdf_document
+date: "2024-03-18"
+---
+
+The code is in [https://github.com/megurukiss/ds241/blob/main/final.Rmd](https://github.com/megurukiss/ds241/blob/main/final.Rmd)
+
+## 1
+
+### a
+
+```{r}
+library(readr)
+test_data <- read_csv("~/Downloads/ds241/final/test_data.csv")
+train_data <- read_csv("~/Downloads/ds241/final/train_data.csv")
+validation_data<-read_csv("~/Downloads/ds241/final/validation_data.csv")
+
+remove0<-function(dataset){
+  return (dataset[dataset$fare!=0 & dataset$distance_traveled!=0 & dataset$trip_duration!=0,])
+}
+test_data=remove0(test_data)
+train_data=remove0(train_data)
+validation_data=remove0(validation_data)
+```
+
+### b
+
+No, we can't use surge_applied as numeric, since its binary. The interpretation of such value is important, we need to check how the change from 0 to 1 affects the target. 
+
+### c
+
+```{r}
+pairs(train_data)
+```
+
+Some column pairs like (fare,total_fare),(fare,tip),(total_fare,tip) are linear related. Column num_of _passenger is discrete. 
+
+## 2
+
+
+### a
+
+
+```{r}
+
+# standardize
+features<- c("trip_duration", "distance_traveled", "num_of_passengers","fare","tip", "miscellaneous_fees","total_fare")
+train_scaled <- scale(train_data[features])
+train_data <- cbind(train_scaled, surge_applied = train_data$surge_applied)
+train_data <- as.data.frame(train_data)
+
+names(train_data)[1:length(features)] <- features
+
+# remove outliers
+remove_outlier=function(dataset,column){
+  mn=mean(dataset[[column]])
+  std=sd(dataset[[column]])
+  
+  z_scores <- abs((dataset[[column]] - mn) / std)
+  return(dataset[z_scores < 3, ])
+  
+}
+train_data=remove_outlier(train_data,"trip_duration")
+train_data=remove_outlier(train_data,"distance_traveled")
+train_data=remove_outlier(train_data,"surge_applied")
+train_data=remove_outlier(train_data,"num_of_passengers")
+train_data=remove_outlier(train_data,"fare")
+
+```
+
+
+```{r}
+# standardize
+
+
+#train_data=scale(train_data)
+#train_data=as.data.frame(train_data)
+#colnames(train_data) <- colnames(test_data)
+
+
+#validation_data=scale(validation_data)
+#validation_data=as.data.frame(validation_data)
+#colnames(validation_data) <- colnames(test_data)
+
+# standardize
+features<- c("trip_duration", "distance_traveled", "num_of_passengers","fare","tip", "miscellaneous_fees","total_fare")
+train_scaled <- scale(validation_data[features])
+validation_data <- cbind(train_scaled, surge_applied = validation_data$surge_applied)
+validation_data <- as.data.frame(validation_data)
+
+names(train_data)[1:length(features)] <- features
+
+validation_data=remove_outlier(validation_data,"trip_duration")
+validation_data=remove_outlier(validation_data,"distance_traveled")
+validation_data=remove_outlier(validation_data,"surge_applied")
+validation_data=remove_outlier(validation_data,"num_of_passengers")
+validation_data=remove_outlier(validation_data,"fare")
+```
+
+
+```{r}
+
+# fit model
+model <- lm(fare ~ trip_duration + distance_traveled + num_of_passengers + surge_applied, data=train_data)
+
+predicted_fare <- predict(model, newdata=train_data)
+
+library(ggplot2)
+ggplot(train_data, aes(x=predicted_fare, y= fare)) +
+  geom_point() +
+  geom_abline(intercept=0, slope=1)+
+  labs(x='Predicted Fare', y='Actual Fare', title='Predicted vs. Actual')
+```
+
+### b
+
+```{r}
+res <- model$residuals 
+plot(fitted(model), res) 
+abline(0,0) 
+
+```
+
+The residual can be treated as mean 0 since its equally around 0 line. However, the residual has distinct variance, the variance near 0 is larger than the variance greater than 0.
+
+```{r}
+plot(model,which = 1)
+```
+
+The residual variance does not seem to vary for different fitted values. Also, we can not find any obvious dependency pattern out of the residual plot.
+
+```{r}
+qqnorm(res) 
+qqline(res)
+```
+The residual can be treated as normal, since its close to the theoretical line of normal distribution.
+Any violation of above assumption can make model be inaccurate, which requires additional process to handle. 
+
+```{r}
+summary(model)
+```
+Intercept, trip_duration, distance_traveled and num_of_passengers are significant, surge_applied is not.We can't trust the p value of the model, since the basic assumption of constant variance is violated in question (b). It's not consistent with what i observed in 1(c).
+
+### d
+
+```{r}
+library(car)
+vif(model)
+```
+
+The vif value of all predictors are normal. A vif higher than 10 may indicate that there is multicollinearity between the predictors.
+
+### e
+```{r}
+r2=function(model,data){
+  gt_fare=data$fare
+  pred_fare=predict(model,newdata=data)
+  return(1-(sum((pred_fare - gt_fare)^2))/(sum((gt_fare - mean(gt_fare))^2)))
+}
+
+rsquare=r2(model,train_data)
+print(rsquare)
+```
+
+
+### f
+
+```{r}
+boxplot(predicted_fare)
+```
+Yes, there is outliers in predicted values.
+
+
+## 3
+
+### a
+```{r}
+confint(model, level = 0.99)
+```
+The Intercept, trip_duration, distance_traveled, num_of_passengers all have positive confidence interval, which means as these values increase, fare will increase correspondingly. surge_applied have both negative and positive values. Since the model didn't violate the basic assumption, surge_applied should not be trusted just like p-value. The negative value of surge_applied also doesn't make sense in real life, since the fare should be higher than usual when surge is applied.
+
+### b
+```{r}
+B = 1000
+n = nrow(train_data)
+coef.boot <- matrix(0, B, 5)
+for (b in 1:B) {
+  indices = sample(seq(1,n), replace=T)
+  m.boot = lm(fare ~ trip_duration + distance_traveled + num_of_passengers + surge_applied, data = train_data[indices,])
+  coef.boot[b,] = m.boot$coefficients
+}
+ci_intercept=quantile(coef.boot[,1], probs = c(0.005, 0.995))
+ci_1=quantile(coef.boot[,2], probs = c(0.005, 0.995))
+ci_2=quantile(coef.boot[,3], probs = c(0.005, 0.995))
+ci_3=quantile(coef.boot[,4], probs = c(0.005, 0.995))
+ci_4=quantile(coef.boot[,5], probs = c(0.005, 0.995))
+print(ci_intercept)
+print(ci_1)
+print(ci_2)
+print(ci_3)
+print(ci_4)
+```
+The bootstrap confidence interval is larger than the one in (a), but mostly same. The bootstrap one should be more accurate, since in the case when model assumption is violated, nonparamatric methods like bootstrap should be more trustworthy.
+
+
+## 4
+
+### a
+
+```{r}
+library(leaps)
+dat_x <- train_data[, c("trip_duration", "distance_traveled","num_of_passengers","surge_applied")]
+dat_y<-train_data[,c("fare")]
+L = leaps(dat_x, dat_y)
+ind = which.min(L$Cp)
+plot(L$size,L$Cp)
+points(L$size[ind],L$Cp[ind],col = 'darkred',pch = 19)
+points(aggregate(L$Cp, by = list(L$size), min),lwd = 2,col = 'darkred',type = 'b',pch = 19)
+```
+
+```{r}
+names(dat_x)[L$which[ind,]] 
+```
+
+The best model is fare ~ trip_duration + distance_traveled + num_of_passengers
+```{r}
+model2 <- lm(fare ~ trip_duration + distance_traveled + num_of_passengers, data=train_data)
+summary(model2)
+```
+```{r}
+r2(model2,validation_data)
+```
+
+
+
+The R square are non-decreasing, which means as variable numbers grow, the R square will always get larger, while AIC won't. AIC is a more reliable criterion than R square.
+
+### b
+
+```{r}
+library(glmnet)
+
+x = model.matrix(fare ~ trip_duration + distance_traveled + num_of_passengers + surge_applied,train_data)[,-1]
+y = train_data$fare
+
+set.seed(241)
+lasso.cv = cv.glmnet(y = y, x = x, alpha=1, nfolds = 10)
+lasso.cv$lambda.min
+
+
+```
+
+```{r}
+lasso_model <- glmnet(x, y, alpha=1, lambda=lasso.cv$lambda.min)
+print(coef(lasso_model))
+```
+The lasso model eliminate surge_applied. Ridge regression can't selection variables, since its a L2 penalty, it will keep all the variables instead of filtering variables.
+
+### c
+
+```{r}
+library(quantreg)
+library(MASS)
+m.huber = rlm(fare ~ trip_duration + distance_traveled + num_of_passengers, psi = psi.huber,data=train_data)
+m.lms = lmsreg(fare ~ trip_duration + distance_traveled + num_of_passengers, data=train_data)
+m.lts = ltsreg(fare ~ trip_duration + distance_traveled + num_of_passengers, data=train_data)
+m.l1 = rq(fare ~ trip_duration + distance_traveled + num_of_passengers, data=train_data)
+```
+
+```{r}
+r2_huber=r2(m.huber,validation_data)
+r2_lms=r2(m.lms,validation_data)
+r2_lts=r2(m.lts,validation_data)
+r2_l1=r2(m.l1,validation_data)
+
+print(r2_huber)
+print(r2_lms)
+print(r2_lts)
+print(r2_l1)
+```
+
+The best R2 in validation dataset is huber regression.
+
+```{r}
+model3=rlm(fare ~ trip_duration + distance_traveled + num_of_passengers, psi = psi.huber,data=train_data)
+```
+
+### d
+```{r}
+
+cooks_distances <- cooks.distance(model)
+idx=order(cooks_distances, decreasing = TRUE)[1:10]
+train_cleared=train_data[-idx,]
+```
+
+```{r}
+# refit model
+m=lm(fare ~ trip_duration + distance_traveled + num_of_passengers, data=train_cleared)
+r2_refit=r2(m,validation_data)
+print(r2_refit)
+```
+The R2 is better than robust regression on validation set. In my opinion, i think its a good way to remove outliers, however, it only remove the first 10 outliers. In the case when there is more than 10 outliers, it will perform worse than Huber regression. While the cooks distance help remove the outliers, huber regression mitigate the influence of outliers instead of removing them, it should work better in the case when the number of outliers is more than 10.
+
+## 5
+
+### a
+
+```{r}
+
+model4=lm(fare ~ trip_duration+I(trip_duration^2) + distance_traveled+I(distance_traveled^2) + num_of_passengers+I(num_of_passengers^2), data=train_data)
+summary(model4)
+```
+The square term of binary variable doesn't provide any new information since the square of 1 is still 1.
+
+### b
+
+From the p-value, we can see trip_duration^2, distance_traveled^2, num_of_passengers^2 are significant. The negative term means the variable have a parabolic-like influence on the target, as the variable grows, it will increase for some time but start decreasing at some point.
+
+```{r}
+r2(model4,validation_data)
+```
+The r2 is better then the one in model3.
+
+```{r}
+predicted_fare <- predict(model4, newdata=train_data)
+
+library(ggplot2)
+ggplot(train_data, aes(x=predicted_fare, y= fare)) +
+  geom_point() +
+  geom_abline(intercept=0, slope=1)+
+  labs(x='Predicted Fare', y='Actual Fare', title='Predicted vs. Actual')
+```
+
+### c
+
+```{r}
+model5=rlm(fare ~ trip_duration+I(trip_duration^2) + distance_traveled+I(distance_traveled^2) + num_of_passengers+I(num_of_passengers^2), psi = psi.huber, data=train_data)
+summary(model5)
+```
+The polynomial regression should be more sensitive to outliers than linear regression. Since the outliers are doubled or tripled in the polynomial regression, making it more influential to the model.
+
+### d
+```{r}
+print(r2(model,validation_data))
+print(r2(model2,validation_data))
+print(r2(model3,validation_data))
+print(r2(model4,validation_data))
+print(r2(model5,validation_data))
+```
+The best model on validation set is model4, which is polynomial regression.
+
+```{r}
+features<- c("trip_duration", "distance_traveled", "num_of_passengers","fare","tip", "miscellaneous_fees","total_fare")
+train_scaled <- scale(test_data[features])
+test_data <- cbind(train_scaled, surge_applied = test_data$surge_applied)
+test_data <- as.data.frame(test_data)
+
+names(train_data)[1:length(features)] <- features
+
+test_data=remove_outlier(test_data,"trip_duration")
+test_data=remove_outlier(test_data,"distance_traveled")
+test_data=remove_outlier(test_data,"surge_applied")
+test_data=remove_outlier(test_data,"num_of_passengers")
+test_data=remove_outlier(test_data,"fare")
+
+
+r2(model4,test_data)
+```
+
+The R2 on test dataset is 0.885.
+
+```{r}
+r2(model,test_data)
+r2(model2,test_data)
+r2(model3,test_data)
+r2(model4,test_data)
+r2(model5,test_data)
+```
+The huber regression and huber polynomial regression did give better R2 square on test dataset. 
+The best model on the validation set doesn't has to be the best model on the test dataset. The validation set may not be representitive for all the dataset, the test data may have a different distribution from the training set, which makes the best model different.
+
+
+## 6
+
+### a
+
+Linear model is not suitable for the prediction of surge_applied, since its binary valued, while linear model should take a numeric value as target. Instead, we should use logistic regression for this task, since logistic regression is used for categorical value predictions, it predicts the probability of one of the category instead of a numeric output.
+
+### b
+
+```{r}
+
+ggplot(train_data[train_data$surge_applied==1,], aes(x=distance_traveled)) +
+  geom_histogram() +
+  labs(x="Distance Traveled", y="Count") +
+  theme_minimal()
+
+```
+```{r}
+ggplot(train_data[train_data$surge_applied==0,], aes(x=distance_traveled)) +
+  geom_histogram() +
+  labs(x="Distance Traveled",  y="Count") +
+  theme_minimal()
+```
+
+In low distance, the surge_applied value of 0 is much larger than value of 1, which means, surge is usually not applied in low distance. And surge more likely to be applied in high distance.
+
+
+### c
+
+```{r}
+ggplot(train_data[train_data$surge_applied == 0,], aes(x=miscellaneous_fees)) +
+  geom_histogram() +
+  labs(x="Miscellaneous Fees", y="Count") +
+  theme_minimal()
+```
+```{r}
+ggplot(train_data[train_data$surge_applied == 1,], aes(x=miscellaneous_fees)) +
+  geom_histogram() +
+  labs(x="Miscellaneous Fees", y="Count") +
+  theme_minimal()
+```
+From the histogram, the surge do have influence on miscellaneous fees. When surge is applied, the miscellaneous fee tend to be higher than when surge is not applied.
+
+
+### d
+
+```{r}
+model_logistic <- glm(surge_applied ~ fare + distance_traveled + trip_duration + miscellaneous_fees, data=train_data, family=binomial())
+
+summary(model_logistic)
+```
+All the p value are less than 0.05, which indicate we can treat all the variables as significant. The distance_traveled has a negative influence on surge_applied, while miscellaneous_fees has a positive influence on surge_applied, which is consistent with what we observed in 6(b) and 6(c).
+
+### e
+
+```{r}
+predicted_surge= predict(model_logistic, newdata=train_data, type="response")
+train_data$predicted_surge=predicted_surge
+#train_data$predicted_surge=ifelse(predicted_surge > 0.5, 1, 0)
+```
+
+
+
+```{r}
+ggplot() +
+  labs(x="Surge Applied", y="Distance Traveled") +
+  geom_point(data = train_data, aes(x=surge_applied, y=distance_traveled), color = "blue")+
+  geom_point(data = train_data, aes(x=predicted_surge, y=distance_traveled), color = "green")+
+  theme_minimal()
+```
+The predicted surge_applied value are almsot same as the ground truth surge_applied, with only several points don't match.
+
+```{r}
+ggplot() +
+  labs(x="Surge Applied", y="Miscellaneous Fees") +
+  geom_point(data = train_data, aes(x=surge_applied, y=miscellaneous_fees), color = "blue")+
+  geom_point(data = train_data, aes(x=predicted_surge, y=miscellaneous_fees), color = "green")+
+  theme_minimal()
+```
+There are several points mismatch with miscellaneous fees larger than 2. The ground truth of surge_applied should be 0, the model misclassified it to 1.
+
+### f
+
+```{r}
+
+m0=glm(surge_applied~1,family = binomial(),data=train_data)
+m1=glm(surge_applied ~ fare + distance_traveled + trip_duration + miscellaneous_fees,family = binomial(),data=train_data)
+
+step(m1, direction="backward")
+```
+
+The best model is surge_applied ~ fare + distance_traveled + trip_duration + 
+    miscellaneous_fees, which is the full model.
+
+### g
+
+
+```{r}
+train_data$predicted_surge=ifelse(predicted_surge > 0.5, 1, 0)
+
+acc=mean(train_data$surge_applied == train_data$predicted_surge)
+print(acc)
+```
+The accuracy score is 0.986.
+
+
+## 7
+
+Sorry about the handwrite, but i have 2 interviews today, so i really don't have time for the latex code.
+
+### a
+
+![Alt](~/Desktop/WechatIMG23.jpg)
+
+
+
+
+![Alt](~/Desktop/WechatIMG25.jpg)
+
+
+
